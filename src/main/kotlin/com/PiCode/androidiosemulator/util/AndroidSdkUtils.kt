@@ -105,7 +105,13 @@ object AndroidSdkUtils {
                 return emptyList()
             }
             process.inputStream.bufferedReader().readLines()
-                .filter { it.isNotBlank() && !it.startsWith("INFO") && !it.startsWith("WARNING") && !it.contains(":") }
+                .filter { line ->
+                    line.isNotBlank() &&
+                    !line.startsWith("INFO:") &&
+                    !line.startsWith("WARNING:") &&
+                    !line.startsWith("ERROR:") &&
+                    !line.startsWith("emulator:")
+                }
         } catch (e: Exception) {
             emptyList()
         }
