@@ -1,12 +1,12 @@
 package com.PiCode.androidiosemulator.actions
 
-import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.ui.Messages
 import com.PiCode.androidiosemulator.settings.EmulatorSettingsConfigurable
+import com.PiCode.androidiosemulator.util.AndroidSdkUtils
 
 class EmulatorAction : AnAction() {
 
@@ -27,19 +27,17 @@ class EmulatorAction : AnAction() {
     }
 
     private fun startAndroidEmulator() {
-        val propertiesComponent = PropertiesComponent.getInstance()
-        val sdkKey = "android.sdk.path"
-        val sdkPath = propertiesComponent.getValue(sdkKey)
-        
+        val sdkPath = AndroidSdkUtils.getOrDetectSdkPath()
+
         if (sdkPath.isNullOrEmpty()) {
             val openSettings = Messages.showYesNoDialog(
-                "Android SDK path is not set. Would you like to configure it in settings?",
+                "Android SDK path is not set and could not be auto-detected. Would you like to configure it in settings?",
                 "SDK Path Not Found",
                 "Open Settings",
                 "Cancel",
                 null
             )
-            
+
             if (openSettings == Messages.YES) {
                 ApplicationManager.getApplication().invokeLater {
                     ShowSettingsUtil.getInstance().showSettingsDialog(null, EmulatorSettingsConfigurable::class.java)
@@ -48,11 +46,11 @@ class EmulatorAction : AnAction() {
             return
         }
 
-        val emulatorPath = "$sdkPath/emulator/emulator"
-        val avdList = getAvailableAvds(emulatorPath)
-        
+        val emulatorPath = AndroidSdkUtils.getEmulatorPath(sdkPath)
+        val avdList = AndroidSdkUtils.getAvailableAvds(emulatorPath)
+
         if (avdList.isEmpty()) {
-            Messages.showErrorDialog("No AVDs found in the specified SDK path.", "Error")
+            Messages.showErrorDialog("No AVDs found. Please create an AVD in Android Studio's AVD Manager.", "Error")
             return
         }
 
@@ -74,17 +72,6 @@ class EmulatorAction : AnAction() {
             } catch (e: Exception) {
                 Messages.showErrorDialog("Failed to start Android Emulator: ${e.message}", "Error")
             }
-        }
-    }
-
-    private fun getAvailableAvds(emulatorPath: String): List<String> {
-        return try {
-            val process = ProcessBuilder(emulatorPath, "-list-avds")
-                .redirectErrorStream(true)
-                .start()
-            process.inputStream.bufferedReader().readLines()
-        } catch (e: Exception) {
-            emptyList()
         }
     }
 

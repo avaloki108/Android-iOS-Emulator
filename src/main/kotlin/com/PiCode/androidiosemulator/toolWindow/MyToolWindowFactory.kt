@@ -1,6 +1,5 @@
 package com.PiCode.androidiosemulator.toolWindow
 
-import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
@@ -13,8 +12,8 @@ import com.intellij.ui.components.JBPanel
 import com.intellij.ui.content.ContentFactory
 import com.PiCode.androidiosemulator.MyBundle
 import com.PiCode.androidiosemulator.services.MyProjectService
+import com.PiCode.androidiosemulator.util.AndroidSdkUtils
 import javax.swing.JButton
-import javax.swing.JFileChooser
 
 class MyToolWindowFactory : ToolWindowFactory {
 
@@ -33,8 +32,6 @@ class MyToolWindowFactory : ToolWindowFactory {
     class MyToolWindow(toolWindow: ToolWindow) {
 
         private val service = toolWindow.project.service<MyProjectService>()
-        private val propertiesComponent = PropertiesComponent.getInstance()
-        private val sdkKey = "android.sdk.path"
 
         fun getContent() = JBPanel<JBPanel<*>>().apply {
             val label = JBLabel(MyBundle.message("randomLabel", "?"))
@@ -63,16 +60,21 @@ class MyToolWindowFactory : ToolWindowFactory {
         }
 
         private fun startAndroidEmulator(label: JBLabel) {
-            val sdkPath = getOrSetSdkPath()
+            val sdkPath = AndroidSdkUtils.getOrDetectSdkPath()
+
             if (sdkPath == null) {
-                label.text = "Android SDK path not set."
+                label.text = "Android SDK path not set and could not be auto-detected."
+                Messages.showErrorDialog(
+                    "Android SDK path is not set. Please configure it in the settings under 'File > Settings > Android-iOS Emulator'.",
+                    "Error"
+                )
                 return
             }
 
-            val emulatorPath = "$sdkPath/emulator/emulator"
-            val avdList = getAvailableAvds(emulatorPath)
+            val emulatorPath = AndroidSdkUtils.getEmulatorPath(sdkPath)
+            val avdList = AndroidSdkUtils.getAvailableAvds(emulatorPath)
             if (avdList.isEmpty()) {
-                label.text = "No AVDs found in the specified SDK path."
+                label.text = "No AVDs found. Please create an AVD in Android Studio."
                 return
             }
 
@@ -87,36 +89,13 @@ class MyToolWindowFactory : ToolWindowFactory {
 
             if (avdChoice != null) {
                 try {
-                    val process = ProcessBuilder(emulatorPath, "-avd", avdChoice)
+                    ProcessBuilder(emulatorPath, "-avd", avdChoice)
                         .redirectErrorStream(true)
                         .start()
                     label.text = "Android Emulator starting... ($avdChoice)"
                 } catch (e: Exception) {
                     label.text = "Failed to start Android Emulator: ${e.message}"
                 }
-            }
-        }
-
-        private fun getOrSetSdkPath(): String? {
-            val sdkPath = propertiesComponent.getValue(sdkKey)
-            if (sdkPath.isNullOrEmpty()) {
-                Messages.showErrorDialog(
-                    "Android SDK path is not set. Please configure it in the settings under 'File > Settings > Android-iOS Emulator'.",
-                    "Error"
-                )
-                return null
-            }
-            return sdkPath
-        }
-
-        private fun getAvailableAvds(emulatorPath: String): List<String> {
-            return try {
-                val process = ProcessBuilder(emulatorPath, "-list-avds")
-                    .redirectErrorStream(true)
-                    .start()
-                process.inputStream.bufferedReader().readLines()
-            } catch (e: Exception) {
-                emptyList()
             }
         }
 
@@ -144,7 +123,7 @@ class MyToolWindowFactory : ToolWindowFactory {
 
             if (simulatorChoice != null) {
                 try {
-                    val process = ProcessBuilder("xcrun", "simctl", "boot", simulatorChoice)
+                    ProcessBuilder("xcrun", "simctl", "boot", simulatorChoice)
                         .redirectErrorStream(true)
                         .start()
                     label.text = "iOS Simulator starting... ($simulatorChoice)"
@@ -168,4 +147,3 @@ class MyToolWindowFactory : ToolWindowFactory {
         }
     }
 }
-
