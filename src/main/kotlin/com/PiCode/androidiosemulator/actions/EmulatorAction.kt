@@ -1,19 +1,14 @@
 package com.PiCode.androidiosemulator.actions
 
-import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.ui.Messages
 import com.PiCode.androidiosemulator.settings.EmulatorSettingsConfigurable
-import java.io.File
+import com.PiCode.androidiosemulator.util.AndroidSdkUtils
 
 class EmulatorAction : AnAction() {
-
-    companion object {
-        private const val SDK_KEY = "android.sdk.path"
-    }
 
     override fun actionPerformed(e: AnActionEvent) {
         val options = arrayOf("Android Emulator", "iOS Simulator")
@@ -32,17 +27,7 @@ class EmulatorAction : AnAction() {
     }
 
     private fun startAndroidEmulator() {
-        val propertiesComponent = PropertiesComponent.getInstance()
-        var sdkPath = propertiesComponent.getValue(SDK_KEY)
-
-        // Try to auto-detect SDK path if not set
-        if (sdkPath.isNullOrEmpty()) {
-            sdkPath = detectAndroidSdkPath()
-            if (sdkPath != null) {
-                // Save the detected path for future use
-                propertiesComponent.setValue(SDK_KEY, sdkPath)
-            }
-        }
+        val sdkPath = AndroidSdkUtils.getOrDetectSdkPath()
 
         if (sdkPath.isNullOrEmpty()) {
             val openSettings = Messages.showYesNoDialog(
@@ -61,8 +46,8 @@ class EmulatorAction : AnAction() {
             return
         }
 
-        val emulatorPath = getEmulatorPath(sdkPath)
-        val avdList = getAvailableAvds(emulatorPath)
+        val emulatorPath = AndroidSdkUtils.getEmulatorPath(sdkPath)
+        val avdList = AndroidSdkUtils.getAvailableAvds(emulatorPath)
 
         if (avdList.isEmpty()) {
             Messages.showErrorDialog("No AVDs found. Please create an AVD in Android Studio's AVD Manager.", "Error")
@@ -87,84 +72,6 @@ class EmulatorAction : AnAction() {
             } catch (e: Exception) {
                 Messages.showErrorDialog("Failed to start Android Emulator: ${e.message}", "Error")
             }
-        }
-    }
-
-    /**
-     * Detects the Android SDK path from common locations and environment variables.
-     */
-    private fun detectAndroidSdkPath(): String? {
-        // Check ANDROID_HOME environment variable first
-        System.getenv("ANDROID_HOME")?.let { path ->
-            if (File(path).exists()) return path
-        }
-
-        // Check ANDROID_SDK_ROOT environment variable
-        System.getenv("ANDROID_SDK_ROOT")?.let { path ->
-            if (File(path).exists()) return path
-        }
-
-        val osName = System.getProperty("os.name").lowercase()
-        val userHome = System.getProperty("user.home")
-
-        // Check common SDK locations based on OS
-        val commonPaths = when {
-            osName.contains("win") -> listOf(
-                "$userHome\\AppData\\Local\\Android\\Sdk",
-                "C:\\Android\\Sdk",
-                "$userHome\\Android\\Sdk"
-            )
-            osName.contains("mac") -> listOf(
-                "$userHome/Library/Android/sdk",
-                "/Users/Shared/Android/sdk"
-            )
-            else -> listOf(
-                "$userHome/Android/Sdk",
-                "/opt/android-sdk",
-                "/usr/local/android-sdk"
-            )
-        }
-
-        for (path in commonPaths) {
-            val sdkDir = File(path)
-            if (sdkDir.exists() && sdkDir.isDirectory) {
-                // Verify it's a valid SDK by checking for emulator directory
-                val emulatorDir = File(sdkDir, "emulator")
-                if (emulatorDir.exists()) {
-                    return path
-                }
-            }
-        }
-
-        return null
-    }
-
-    /**
-     * Returns the correct emulator executable path based on the OS.
-     */
-    private fun getEmulatorPath(sdkPath: String): String {
-        val osName = System.getProperty("os.name").lowercase()
-        val separator = File.separator
-        return if (osName.contains("win")) {
-            "${sdkPath}${separator}emulator${separator}emulator.exe"
-        } else {
-            "${sdkPath}${separator}emulator${separator}emulator"
-        }
-    }
-
-    private fun getAvailableAvds(emulatorPath: String): List<String> {
-        return try {
-            val process = ProcessBuilder(emulatorPath, "-list-avds")
-                .redirectErrorStream(true)
-                .start()
-            val exitCode = process.waitFor()
-            if (exitCode != 0) {
-                return emptyList()
-            }
-            process.inputStream.bufferedReader().readLines()
-                .filter { it.isNotBlank() && !it.startsWith("INFO") && !it.startsWith("WARNING") && !it.contains(":") }
-        } catch (e: Exception) {
-            emptyList()
         }
     }
 
